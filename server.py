@@ -4,12 +4,15 @@ from tokens import (
     confirm_token,
     check_token,
     save_trello_credentials,
+    load_tokens,
+    save_tokens
 )
+import urllib.parse
 
 app = Flask(__name__)
 
 # -----------------------------
-# Pagina HTML per confermare accesso
+# PAGINA DI AUTORIZZAZIONE
 # -----------------------------
 AUTH_PAGE = """
 <html>
@@ -29,30 +32,7 @@ AUTH_PAGE = """
 """
 
 # -----------------------------
-# Pagina HTML per Trello
-# -----------------------------
-TRELLO_PAGE = """
-<html>
-<head>
-<title>Collega Trello</title>
-</head>
-<body style="font-family:Arial; text-align:center; margin-top:50px;">
-<h2>Collega Trello</h2>
-<p>Inserisci la tua API Key e il tuo Token Trello</p>
-
-<form action="/save_trello" method="POST">
-    <input type="hidden" name="token" value="{{token}}">
-    <p><input type="text" name="trello_key" placeholder="API Key" style="width:300px;"></p>
-    <p><input type="text" name="trello_token" placeholder="Token Trello" style="width:300px;"></p>
-    <button type="submit" style="padding:10px 20px;">Salva</button>
-</form>
-
-</body>
-</html>
-"""
-
-# -----------------------------
-# GENERA TOKEN
+# GENERA TOKEN DI ACCESSO
 # -----------------------------
 @app.route("/generate/<user_code>")
 def generate(user_code):
@@ -74,7 +54,7 @@ def auth_page(token):
 def confirm(token):
     ok = confirm_token(token)
     if ok:
-        return "Accesso confermato! Puoi tornare su Telegram."
+        return "Accesso confermato! Ora puoi collegare Trello dal bot."
     return "Token non valido."
 
 # -----------------------------
@@ -84,28 +64,55 @@ def confirm(token):
 def check(token):
     return jsonify(check_token(token))
 
-# -----------------------------
-# PAGINA PER INSERIRE CREDENZIALI TRELLO
-# -----------------------------
-@app.route("/trello/<token>")
-def trello_page(token):
-    return render_template_string(TRELLO_PAGE, token=token)
+# ============================================================
+# 🔵 TRELLO OAUTH — LOGIN COME GOOGLE
+# ============================================================
+
+TRELLO_API_KEY = "YOUR_TRELLO_API_KEY"   # <--- SOSTITUISCI QUI
 
 # -----------------------------
-# SALVA CREDENZIALI TRELLO
+# INIZIA LOGIN TRELLO
 # -----------------------------
-@app.route("/save_trello", methods=["POST"])
-def save_trello():
-    token = request.form.get("token")
-    key = request.form.get("trello_key")
-    ttoken = request.form.get("trello_token")
+@app.route("/trello/start/<user_code>")
+def trello_start(user_code):
+    # Genera token temporaneo per associare l’utente
+    token = create_token(user_code)
 
-    ok = save_trello_credentials(token, key, ttoken)
+    # URL di callback
+    callback_url = f"https://{request.host}/trello/callback"
 
-    if not ok:
-        return "Token non valido", 400
+    # URL ufficiale Trello OAuth
+    trello_url = (
+        "https://trello.com/1/authorize?"
+        f"key={TRELLO_API_KEY}&"
+        f"return_url={urllib.parse.quote(callback_url)}&"
+        "scope=read,write&"
+        "expiration=never&"
+        "name=TechiBot"
+    )
 
-    return "Credenziali Trello salvate! Puoi tornare su Telegram."
+    return jsonify({"auth_url": trello_url, "token": token})
+
+# -----------------------------
+# CALLBACK DOPO AUTORIZZAZIONE TRELLO
+# -----------------------------
+@app.route("/trello/callback")
+def trello_callback():
+    trello_token = request.args.get("token")
+
+    if not trello_token:
+        return "Errore: Trello non ha restituito un token."
+
+    # Recupera l’ultimo token generato (utente corrente)
+    data = load_tokens()
+    last_token = list(data.keys())[-1]
+
+    data[last_token]["trello_token"] = trello_token
+    save_tokens(data)
+
+    return "Trello collegato! Puoi tornare su Telegram."
+
+# ============================================================
 
 # -----------------------------
 # AVVIO SERVER
