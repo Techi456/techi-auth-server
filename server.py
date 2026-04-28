@@ -11,9 +11,10 @@ import urllib.parse
 
 app = Flask(__name__)
 
-# -----------------------------
-# PAGINA DI AUTORIZZAZIONE
-# -----------------------------
+# ============================================================
+# 🔵 PAGINA DI AUTORIZZAZIONE (solo per login bot)
+# ============================================================
+
 AUTH_PAGE = """
 <html>
 <head>
@@ -68,7 +69,7 @@ def check(token):
 # 🔵 TRELLO OAUTH — LOGIN COME GOOGLE
 # ============================================================
 
-TRELLO_API_KEY = "140a60e799e18ca52c60afe6f1933d55"   # <--- SOSTITUISCI QUI
+TRELLO_API_KEY = "YOUR_TRELLO_API_KEY"   # <--- INSERISCI QUI LA TUA API KEY
 
 # -----------------------------
 # INIZIA LOGIN TRELLO
@@ -96,7 +97,7 @@ def trello_start(user_code):
 # -----------------------------
 # CALLBACK DOPO AUTORIZZAZIONE TRELLO
 # -----------------------------
-@app.route("/trello/callback")
+@app.route("/trello/ccallback")
 def trello_callback():
     trello_token = request.args.get("token")
 
@@ -119,4 +120,5 @@ def trello_callback():
 # -----------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
 
