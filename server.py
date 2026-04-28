@@ -68,7 +68,7 @@ def check(token):
 # 🔵 TRELLO OAUTH — LOGIN COME GOOGLE
 # ============================================================
 
-TRELLO_API_KEY = "YOUR_TRELLO_API_KEY"   # <--- SOSTITUISCI QUI
+TRELLO_API_KEY = "140a60e799e18ca52c60afe6f1933d55"   # <--- SOSTITUISCI QUI
 
 # -----------------------------
 # INIZIA LOGIN TRELLO
