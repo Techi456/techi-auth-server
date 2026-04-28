@@ -1,127 +1,116 @@
 from flask import Flask, request, jsonify, render_template_string
-import uuid
-import json
+from token import (
+    create_token,
+    confirm_token,
+    check_token,
+    save_trello_credentials,
+)
 import time
-import os
 
 app = Flask(__name__)
 
-TOKENS_FILE = "tokens.json"
-
-def load_tokens():
-    if not os.path.exists(TOKENS_FILE):
-        return {}
-    with open(TOKENS_FILE, "r") as f:
-        return json.load(f)
-
-def save_tokens(data):
-    with open(TOKENS_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-# -------------------------
-# GENERA LINK TEMPORANEO
-# -------------------------
-@app.route("/generate/<user_code>")
-def generate(user_code):
-    token = uuid.uuid4().hex[:6].upper()
-    expires = time.time() + 600  # 10 minuti
-
-    data = load_tokens()
-    data[token] = {
-        "user_code": user_code,
-        "expires": expires,
-        "confirmed": False,
-        "trello_key": None,
-        "trello_token": None
-    }
-    save_tokens(data)
-
-    return jsonify({
-        "login_url": f"https://{request.host}/auth/{token}",
-        "token": token,
-        "expires_in": 600
-    })
-
-# -------------------------
-# PAGINA DI LOGIN
-# -------------------------
-PAGE = """
+# -----------------------------
+# Pagina HTML per confermare accesso
+# -----------------------------
+AUTH_PAGE = """
 <html>
 <head>
-<title>Techi Login</title>
+<title>Autorizzazione</title>
 </head>
 <body style="font-family:Arial; text-align:center; margin-top:50px;">
-<h2>Autorizza Techi</h2>
-<p>Token: {{token}}</p>
+<h2>Autorizza l'accesso</h2>
+<p>Stai autorizzando il tuo bot Techi ad accedere al tuo account.</p>
 
-<form action="/confirm" method="POST">
-    <input type="hidden" name="token" value="{{token}}">
-    <button type="submit">Autorizza</button>
+<form action="/confirm/{{token}}" method="POST">
+    <button type="submit" style="padding:10px 20px;">Confermo</button>
 </form>
 
 </body>
 </html>
 """
 
+# -----------------------------
+# Pagina HTML per Trello
+# -----------------------------
+TRELLO_PAGE = """
+<html>
+<head>
+<title>Collega Trello</title>
+</head>
+<body style="font-family:Arial; text-align:center; margin-top:50px;">
+<h2>Collega Trello</h2>
+<p>Inserisci la tua API Key e il tuo Token Trello</p>
+
+<form action="/save_trello" method="POST">
+    <input type="hidden" name="token" value="{{token}}">
+    <p><input type="text" name="trello_key" placeholder="API Key" style="width:300px;"></p>
+    <p><input type="text" name="trello_token" placeholder="Token Trello" style="width:300px;"></p>
+    <button type="submit" style="padding:10px 20px;">Salva</button>
+</form>
+
+</body>
+</html>
+"""
+
+# -----------------------------
+# GENERA TOKEN
+# -----------------------------
+@app.route("/generate/<user_code>")
+def generate(user_code):
+    token = create_token(user_code)
+    login_url = f"https://{request.host}/auth/{token}"
+    return jsonify({"token": token, "login_url": login_url})
+
+# -----------------------------
+# MOSTRA PAGINA DI AUTORIZZAZIONE
+# -----------------------------
 @app.route("/auth/<token>")
 def auth_page(token):
-    return render_template_string(PAGE, token=token)
+    return render_template_string(AUTH_PAGE, token=token)
 
-# -------------------------
+# -----------------------------
 # CONFERMA ACCESSO
-# -------------------------
-@app.route("/confirm", methods=["POST"])
-def confirm():
-    token = request.form.get("token")
-    data = load_tokens()
+# -----------------------------
+@app.route("/confirm/<token>", methods=["POST"])
+def confirm(token):
+    ok = confirm_token(token)
+    if ok:
+        return "Accesso confermato! Puoi tornare su Telegram."
+    return "Token non valido."
 
-    if token not in data:
-        return "Token non valido", 400
-
-    if time.time() > data[token]["expires"]:
-        return "Token scaduto", 400
-
-    data[token]["confirmed"] = True
-    save_tokens(data)
-
-    return "Accesso confermato! Puoi tornare su Telegram."
-
-# -------------------------
-# CONTROLLO TOKEN
-# -------------------------
+# -----------------------------
+# CHECK TOKEN (usato dal bot)
+# -----------------------------
 @app.route("/check/<token>")
 def check(token):
-    data = load_tokens()
+    return jsonify(check_token(token))
 
-    if token not in data:
-        return jsonify({"valid": False})
+# -----------------------------
+# PAGINA PER INSERIRE CREDENZIALI TRELLO
+# -----------------------------
+@app.route("/trello/<token>")
+def trello_page(token):
+    return render_template_string(TRELLO_PAGE, token=token)
 
-    if time.time() > data[token]["expires"]:
-        return jsonify({"valid": False})
-
-    return jsonify(data[token])
-
-# -------------------------
+# -----------------------------
 # SALVA CREDENZIALI TRELLO
-# -------------------------
-@app.route("/trello", methods=["POST"])
-def trello():
-    body = request.json
-    token = body.get("token")
-    key = body.get("trello_key")
-    ttoken = body.get("trello_token")
+# -----------------------------
+@app.route("/save_trello", methods=["POST"])
+def save_trello():
+    token = request.form.get("token")
+    key = request.form.get("trello_key")
+    ttoken = request.form.get("trello_token")
 
-    data = load_tokens()
+    ok = save_trello_credentials(token, key, ttoken)
 
-    if token not in data:
-        return jsonify({"error": "Token non valido"}), 400
+    if not ok:
+        return "Token non valido", 400
 
-    data[token]["trello_key"] = key
-    data[token]["trello_token"] = ttoken
-    save_tokens(data)
+    return "Credenziali Trello salvate! Puoi tornare su Telegram."
 
-    return jsonify({"status": "ok"})
-    
-
+# -----------------------------
+# AVVIO SERVER
+# -----------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=5000)
+
