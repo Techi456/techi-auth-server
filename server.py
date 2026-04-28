@@ -1,11 +1,10 @@
 from flask import Flask, request, jsonify, render_template_string
-from token import (
+from tokens import (
     create_token,
     confirm_token,
     check_token,
     save_trello_credentials,
 )
-import time
 
 app = Flask(__name__)
 
