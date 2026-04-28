@@ -3,7 +3,6 @@ from tokens import (
     create_token,
     confirm_token,
     check_token,
-    save_trello_credentials,
     load_tokens,
     save_tokens
 )
@@ -12,7 +11,7 @@ import urllib.parse
 app = Flask(__name__)
 
 # ============================================================
-# 🔵 PAGINA DI AUTORIZZAZIONE (solo per login bot)
+# 🔵 LOGIN BASE (per autorizzare il bot)
 # ============================================================
 
 AUTH_PAGE = """
@@ -32,25 +31,16 @@ AUTH_PAGE = """
 </html>
 """
 
-# -----------------------------
-# GENERA TOKEN DI ACCESSO
-# -----------------------------
 @app.route("/generate/<user_code>")
 def generate(user_code):
     token = create_token(user_code)
     login_url = f"https://{request.host}/auth/{token}"
     return jsonify({"token": token, "login_url": login_url})
 
-# -----------------------------
-# MOSTRA PAGINA DI AUTORIZZAZIONE
-# -----------------------------
 @app.route("/auth/<token>")
 def auth_page(token):
     return render_template_string(AUTH_PAGE, token=token)
 
-# -----------------------------
-# CONFERMA ACCESSO
-# -----------------------------
 @app.route("/confirm/<token>", methods=["POST"])
 def confirm(token):
     ok = confirm_token(token)
@@ -58,9 +48,6 @@ def confirm(token):
         return "Accesso confermato! Ora puoi collegare Trello dal bot."
     return "Token non valido."
 
-# -----------------------------
-# CHECK TOKEN (usato dal bot)
-# -----------------------------
 @app.route("/check/<token>")
 def check(token):
     return jsonify(check_token(token))
@@ -71,9 +58,6 @@ def check(token):
 
 TRELLO_API_KEY = "140a60e799e18ca52c60afe6f1933d55"   # <--- INSERISCI QUI LA TUA API KEY
 
-# -----------------------------
-# INIZIA LOGIN TRELLO
-# -----------------------------
 @app.route("/trello/start/<user_code>")
 def trello_start(user_code):
     # Genera token temporaneo per associare l’utente
@@ -94,10 +78,7 @@ def trello_start(user_code):
 
     return jsonify({"auth_url": trello_url, "token": token})
 
-# -----------------------------
-# CALLBACK DOPO AUTORIZZAZIONE TRELLO
-# -----------------------------
-@app.route("/trello/ccallback")
+@app.route("/trello/callback")
 def trello_callback():
     trello_token = request.args.get("token")
 
@@ -115,10 +96,6 @@ def trello_callback():
 
 # ============================================================
 
-# -----------------------------
-# AVVIO SERVER
-# -----------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
 
